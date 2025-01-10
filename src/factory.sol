@@ -4,6 +4,16 @@ pragma solidity ^0.8.20;
 import {FluxInstance} from "./fluxInstance.sol";
 
 contract Factory {
+    event OptionCreated(
+        address indexed optionAddress,
+        address indexed owner,
+        FluxInstance.OptionType optionType,
+        address underlyingToken,
+        address settlementToken,
+        uint256 strikePrice,
+        uint256 duration
+    );
+
     function createOption(
         FluxInstance.OptionType optionType,
         address underlyingToken,
@@ -20,6 +30,15 @@ contract Factory {
             settlementToken
         );
 
+        emit OptionCreated(
+            address(instance),
+            msg.sender,
+            optionType,
+            underlyingToken,
+            settlementToken,
+            strikePrice,
+            duration
+        );
         return address(instance);
     }
 }
