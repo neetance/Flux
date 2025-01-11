@@ -14,6 +14,8 @@ contract Factory {
         uint256 duration
     );
 
+    mapping(address instance => address owner) public owners;
+
     function createOption(
         FluxInstance.OptionType optionType,
         address underlyingToken,
@@ -39,6 +41,8 @@ contract Factory {
             strikePrice,
             duration
         );
+
+        owners[address(instance)] = msg.sender;
         return address(instance);
     }
 }
