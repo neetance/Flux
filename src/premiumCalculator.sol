@@ -30,6 +30,7 @@ contract PremiumCalculator is ChainlinkClient, ConfirmedOwner {
     }
 
     function requestGetPremium(
+        address tokenAddress,
         uint256 currentPrice,
         uint256 strikePrice,
         uint256 expiryDate,
@@ -44,7 +45,9 @@ contract PremiumCalculator is ChainlinkClient, ConfirmedOwner {
                 "&strikePrice=",
                 strikePrice,
                 "&timeToExpiration=",
-                expiryDate
+                expiryDate,
+                "&tokenAddress=",
+                tokenAddress
             )
         );
         Chainlink.Request memory req = _buildChainlinkRequest(
