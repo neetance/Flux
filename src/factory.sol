@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {FluxInstance} from "./fluxInstance.sol";
 import {PremiumCalculator} from "./premiumCalculator.sol";
 import {PriceFetcher} from "./priceFetcher.sol";
+import "@layerzero-v2/interfaces/ILayerZeroEndpointV2.sol";
 
 contract Factory {
     error Only_Owner_Can_Call();
@@ -23,6 +24,7 @@ contract Factory {
     uint256 public s_optionId;
     PremiumCalculator private immutable i_premiumCalculator;
     PriceFetcher private immutable i_priceFetcher;
+    ILayerZeroEndpointV2 private immutable i_layerZero;
 
     mapping(address instance => address owner) public s_owners;
     mapping(uint256 id => OptionParams params) public s_options;
@@ -38,10 +40,15 @@ contract Factory {
         uint256 premium;
     }
 
-    constructor(address _premiumCalculator, address _priceFetcher) {
+    constructor(
+        address _premiumCalculator,
+        address _priceFetcher,
+        address _layerZero
+    ) {
         i_premiumCalculator = PremiumCalculator(_premiumCalculator);
         i_priceFetcher = PriceFetcher(_priceFetcher);
         s_optionId = 0;
+        i_layerZero = ILayerZeroEndpointV2(_layerZero);
     }
 
     function proposeOption(
