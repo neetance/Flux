@@ -4,11 +4,13 @@ pragma solidity ^0.8.20;
 import {FluxInstance} from "./fluxInstance.sol";
 import {PremiumCalculator} from "./premiumCalculator.sol";
 import {PriceFetcher} from "./priceFetcher.sol";
+import {CCIPReceiver} from "@chainlink-ccip/applications/CCIPReceiver.sol";
+import {Client} from "@chainlink-ccip/libraries/Client.sol";
 import "@layerzero-v2/interfaces/ILayerZeroEndpointV2.sol";
 
-contract Factory {
+contract Factory is CCIPReceiver {
     error Only_Owner_Can_Call();
-    error Not_Enough_Premium();
+    error Premium_Not_Paid();
 
     event OptionCreated(
         address indexed optionAddress,
@@ -20,6 +22,7 @@ contract Factory {
         uint256 duration,
         uint256 premium
     );
+    event PremiumReceived(uint256 indexed optionId);
 
     uint256 public s_optionId;
     PremiumCalculator private immutable i_premiumCalculator;
@@ -28,6 +31,7 @@ contract Factory {
 
     mapping(address instance => address owner) public s_owners;
     mapping(uint256 id => OptionParams params) public s_options;
+    mapping(uint32 chainId => address paymentProcessorAddr) paymentProcessorAddrs;
 
     struct OptionParams {
         FluxInstance.OptionType optionType;
@@ -38,13 +42,15 @@ contract Factory {
         uint256 expirationDate;
         uint256 id;
         uint256 premium;
+        bool premiumPaid;
     }
 
     constructor(
         address _premiumCalculator,
         address _priceFetcher,
-        address _layerZero
-    ) {
+        address _layerZero,
+        address _router
+    ) CCIPReceiver(_router) {
         i_premiumCalculator = PremiumCalculator(_premiumCalculator);
         i_priceFetcher = PriceFetcher(_priceFetcher);
         s_optionId = 0;
@@ -56,7 +62,8 @@ contract Factory {
         address _underlyingToken,
         address _settlementToken,
         uint256 _strikePrice,
-        uint256 _duration
+        uint256 _duration,
+        uint32 _chainId
     ) public returns (uint256 id, uint256 premium) {
         id = s_optionId;
         s_optionId += 1;
@@ -85,9 +92,25 @@ contract Factory {
             strikePrice: _strikePrice,
             expirationDate: block.timestamp + _duration,
             id: id,
-            premium: premium
+            premium: premium,
+            premiumPaid: false
         });
         s_options[id] = params;
+
+        MessagingParams memory messagingParams = MessagingParams({
+            dstEid: _chainId,
+            receiver: "",
+            message: abi.encode(
+                msg.sender,
+                _underlyingToken,
+                address(this),
+                premium,
+                id
+            ),
+            options: "",
+            payInLzToken: true
+        });
+        i_layerZero.send(messagingParams, address(this));
     }
 
     function createOption(uint256 id) public payable returns (address) {
@@ -96,10 +119,7 @@ contract Factory {
             revert Only_Owner_Can_Call();
         }
 
-        uint256 premium = params.premium;
-        if (msg.value < premium) {
-            revert Not_Enough_Premium();
-        }
+        if (!params.premiumPaid) revert Premium_Not_Paid();
 
         FluxInstance instance = new FluxInstance(
             params.owner,
@@ -117,9 +137,19 @@ contract Factory {
             params.settlementToken,
             params.strikePrice,
             params.expirationDate,
-            premium
+            params.premium
         );
 
         return address(instance);
+    }
+
+    function _ccipReceive(
+        Client.Any2EVMMessage memory any2EvmMessage
+    ) internal override {
+        uint256 optionId = abi.decode(any2EvmMessage.data, (uint256));
+        OptionParams storage params = s_options[optionId];
+
+        params.premiumPaid = true;
+        emit PremiumReceived(optionId);
     }
 }

@@ -46,8 +46,13 @@ contract PaymentProcessor {
     ) external payable {
         if (msg.sender != address(layerZeroEndpoint)) revert Unauthorized();
 
-        (address user, address token, address recipient, uint256 value) = abi
-            .decode(_message, (address, address, address, uint256));
+        (
+            address user,
+            address token,
+            address recipient,
+            uint256 value,
+            uint256 optionId
+        ) = abi.decode(_message, (address, address, address, uint256, uint256));
         bool success = IERC20(token).transferFrom(user, address(this), value);
         if (!success) revert Transfer_Failed();
 
@@ -61,7 +66,7 @@ contract PaymentProcessor {
         tokens[0] = tokenAmount;
         Client.EVM2AnyMessage memory message = Client.EVM2AnyMessage({
             receiver: abi.encode(recipient),
-            data: abi.encode(user),
+            data: abi.encode(optionId),
             tokenAmounts: tokens,
             extraArgs: Client._argsToBytes(
                 Client.EVMExtraArgsV2({
