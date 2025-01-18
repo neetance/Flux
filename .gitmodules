@@ -13,3 +13,9 @@
 [submodule "lib/LayerZero-v2"]
 	path = lib/LayerZero-v2
 	url = https://github.com/LayerZero-Labs/LayerZero-v2
+[submodule "lib/sgn-v2-contracts"]
+	path = lib/sgn-v2-contracts
+	url = https://github.com/celer-network/sgn-v2-contracts
+[submodule "lib/ccip"]
+	path = lib/ccip
+	url = https://github.com/smartcontractkit/ccip
