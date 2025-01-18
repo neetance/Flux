@@ -146,7 +146,10 @@ contract Factory is CCIPReceiver {
     function _ccipReceive(
         Client.Any2EVMMessage memory any2EvmMessage
     ) internal override {
-        uint256 optionId = abi.decode(any2EvmMessage.data, (uint256));
+        (uint256 optionId, ) = abi.decode(
+            any2EvmMessage.data,
+            (uint256, address)
+        );
         OptionParams storage params = s_options[optionId];
 
         params.premiumPaid = true;
