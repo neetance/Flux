@@ -10,9 +10,15 @@ import "@layerzero-v2/interfaces/ILayerZeroEndpointV2.sol";
 contract PoolManager is CCIPReceiver {
     error Pool_Exists();
     error Pool_Does_Not_Exist();
+    error Amount_Exceeds_Balance();
 
     event PoolCreated(address indexed token, address pool);
     event LiquidityDeposited(
+        address indexed token,
+        address indexed user,
+        uint256 amount
+    );
+    event LiquidityWithdrawn(
         address indexed token,
         address indexed user,
         uint256 amount
@@ -43,7 +49,7 @@ contract PoolManager is CCIPReceiver {
             abi.encodePacked("F", tokenContract.symbol())
         );
 
-        Pool pool = new Pool(name, symbol, address(this));
+        Pool pool = new Pool(name, symbol, address(this), token);
         pools[token] = address(pool);
 
         emit PoolCreated(token, address(pool));
@@ -68,7 +74,7 @@ contract PoolManager is CCIPReceiver {
                 ""
             ),
             options: "",
-            payInLzToken: true
+            payInLzToken: false
         });
         i_layerZero.send(messagingParams, address(this));
     }
@@ -80,13 +86,36 @@ contract PoolManager is CCIPReceiver {
         uint256 amount = any2EvmMessage.destTokenAmounts[0].amount;
         address token = any2EvmMessage.destTokenAmounts[0].token;
 
-        ERC20(token).transferFrom(user, pools[token], amount);
+        ERC20(token).transferFrom(address(this), pools[token], amount);
         Pool(pools[token]).mint(user, amount);
 
         emit LiquidityDeposited(token, user, amount);
     }
 
-    function withdrawLiquidty(address token, uint256 amount) public {
-        // Implementaiton pending
+    function withdrawLiquidty(
+        address _token,
+        uint256 _amount,
+        uint32 _chainId
+    ) public {
+        Pool pool = Pool(pools[_token]);
+        uint256 userBalance = pool.balanceOf(msg.sender);
+        if (userBalance < _amount) revert Amount_Exceeds_Balance();
+
+        uint256 amountToTransfer = getTotalLiquidity(_token) /
+            pool.totalSupply();
+        pool.withdraw(msg.sender, amountToTransfer, _amount);
+
+        MessagingParams memory messagingParams = MessagingParams({
+            dstEid: _chainId,
+            receiver: "",
+            message: abi.encode(address(this), _token, msg.sender, _amount, ""),
+            options: "",
+            payInLzToken: false
+        });
+        i_layerZero.send(messagingParams, address(this));
+    }
+
+    function getTotalLiquidity(address token) public view returns (uint256) {
+        return ERC20(token).balanceOf(pools[token]);
     }
 }
