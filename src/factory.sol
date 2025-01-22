@@ -6,6 +6,7 @@ import {PremiumCalculator} from "./premiumCalculator.sol";
 import {PriceFetcher} from "./priceFetcher.sol";
 import {CCIPReceiver} from "@chainlink-ccip/applications/CCIPReceiver.sol";
 import {Client} from "@chainlink-ccip/libraries/Client.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@layerzero-v2/interfaces/ILayerZeroEndpointV2.sol";
 
 contract Factory is CCIPReceiver {
@@ -32,6 +33,7 @@ contract Factory is CCIPReceiver {
     mapping(address instance => address owner) public s_owners;
     mapping(uint256 id => OptionParams params) public s_options;
     mapping(uint32 chainId => address paymentProcessorAddr) paymentProcessorAddrs;
+    mapping(address token => address pool) pools;
 
     struct OptionParams {
         FluxInstance.OptionType optionType;
@@ -39,6 +41,7 @@ contract Factory is CCIPReceiver {
         address underlyingToken;
         address settlementToken;
         uint256 strikePrice;
+        uint256 amount;
         uint256 expirationDate;
         uint256 id;
         uint256 premium;
@@ -62,8 +65,10 @@ contract Factory is CCIPReceiver {
         address _underlyingToken,
         address _settlementToken,
         uint256 _strikePrice,
+        uint256 _amount,
         uint256 _duration,
-        uint32 _chainId
+        uint32 _chainId,
+        uint256 _balancerPoolId
     ) public returns (uint256 id, uint256 premium) {
         id = s_optionId;
         s_optionId += 1;
@@ -71,7 +76,7 @@ contract Factory is CCIPReceiver {
         uint256 currentPrice = i_priceFetcher.getPairPrice(
             _underlyingToken,
             _settlementToken,
-            id
+            _balancerPoolId
         );
 
         i_premiumCalculator.requestGetPremium(
@@ -90,6 +95,7 @@ contract Factory is CCIPReceiver {
             underlyingToken: _underlyingToken,
             settlementToken: _settlementToken,
             strikePrice: _strikePrice,
+            amount: _amount,
             expirationDate: block.timestamp + _duration,
             id: id,
             premium: premium,
@@ -104,7 +110,7 @@ contract Factory is CCIPReceiver {
                 msg.sender,
                 _underlyingToken,
                 address(this),
-                premium,
+                premium * _amount,
                 id
             ),
             options: "",
@@ -113,7 +119,10 @@ contract Factory is CCIPReceiver {
         i_layerZero.send(messagingParams, address(this));
     }
 
-    function createOption(uint256 id) public payable returns (address) {
+    function createOption(
+        uint256 id,
+        uint256 _balancerPoolId
+    ) public payable returns (address) {
         OptionParams memory params = s_options[id];
         if (msg.sender != params.owner) {
             revert Only_Owner_Can_Call();
@@ -125,9 +134,12 @@ contract Factory is CCIPReceiver {
             params.owner,
             params.optionType,
             params.strikePrice,
+            params.amount,
             params.expirationDate,
+            _balancerPoolId,
             params.underlyingToken,
-            params.settlementToken
+            params.settlementToken,
+            address(i_priceFetcher)
         );
         emit OptionCreated(
             address(instance),
@@ -151,6 +163,9 @@ contract Factory is CCIPReceiver {
             (uint256, address)
         );
         OptionParams storage params = s_options[optionId];
+        address token = params.underlyingToken;
+        address pool = pools[token];
+        ERC20(token).transferFrom(address(this), pool, params.premium);
 
         params.premiumPaid = true;
         emit PremiumReceived(optionId);

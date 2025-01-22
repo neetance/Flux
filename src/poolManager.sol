@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: SEE LICENSE IN LICENSE
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
 import {Pool} from "./pool.sol";
@@ -113,6 +113,8 @@ contract PoolManager is CCIPReceiver {
             payInLzToken: false
         });
         i_layerZero.send(messagingParams, address(this));
+
+        emit LiquidityWithdrawn(_token, msg.sender, _amount);
     }
 
     function getTotalLiquidity(address token) public view returns (uint256) {
