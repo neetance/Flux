@@ -139,7 +139,9 @@ contract Factory is CCIPReceiver {
             _balancerPoolId,
             params.underlyingToken,
             params.settlementToken,
-            address(i_priceFetcher)
+            address(i_priceFetcher),
+            address(i_layerZero),
+            address(this)
         );
         emit OptionCreated(
             address(instance),
@@ -169,5 +171,9 @@ contract Factory is CCIPReceiver {
 
         params.premiumPaid = true;
         emit PremiumReceived(optionId);
+    }
+
+    function getPool(address token) public view returns (address) {
+        return pools[token];
     }
 }
